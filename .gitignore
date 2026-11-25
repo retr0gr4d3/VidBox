@@ -1,5 +1,7 @@
 # Build output and package caches
 /build/
+/build-release/
+/dist/
 /vcpkg_installed/
 
 # NVIDIA Video Effects SDK (NVIDIA license; not redistributable here, ~2 GB). See README.

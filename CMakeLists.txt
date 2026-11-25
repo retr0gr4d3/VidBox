@@ -57,9 +57,18 @@ target_include_directories(VidBox PRIVATE
   ${VFX}/nvvfx/include
   ${VFX_FEATURE_INCLUDES})
 
+# Dev builds fall back to this checkout's SDK folder when there is no vfx\ next to the exe.
+# Distributable builds (build.cmd --release) turn this off so no local path ends up in the exe.
+option(VIDBOX_USE_LOCAL_SDK "Fall back to the SDK in this checkout at run time" ON)
+if(VIDBOX_USE_LOCAL_SDK)
+  set(VIDBOX_SDK_FALLBACK "${VFX}")
+else()
+  set(VIDBOX_SDK_FALLBACK "")
+endif()
+
 target_compile_definitions(VidBox PRIVATE
   UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS
-  VIDBOX_VFX_SDK_DIR="${VFX}")
+  VIDBOX_VFX_SDK_DIR="${VIDBOX_SDK_FALLBACK}")
 
 if(MSVC)
   target_compile_options(VidBox PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W3 /utf-8 /MP>)

@@ -3,23 +3,129 @@
 Native Windows client for the GL.iNet GLKVM and for HDMI capture cards (formerly KVMBox). It replaces the browser and renders on the NVIDIA GPU, adding
 NVIDIA Video Frame Generation (VFG) and Video Super Resolution (VSR) for console play.
 
+## Getting the source
+
+Dear ImGui (`third_party\imgui`) is a git submodule, so clone with:
+
+```
+git clone --recursive <repo-url>
+```
+
+In an existing clone, run `git submodule update --init`. `build.cmd` also does this automatically if the folder
+is empty.
+
+## Requirements
+
+### Hardware
+
+An NVIDIA RTX 40 (Ada) or RTX 50 (Blackwell) GPU with a current driver. These are the GPUs that Video Frame
+Generation supports, and the only CUDA architectures the build targets (`sm_89`, `sm_120`).
+
+### Tools to install
+
+| Tool | Notes |
+|---|---|
+| Visual Studio 2022, any edition (Community, Professional, Enterprise or Build Tools) | Workload **Desktop development with C++**, plus the **vcpkg package manager** component. `build.cmd` finds the install with `vswhere`. VS also supplies CMake and Ninja. |
+| CUDA Toolkit | 13.x is tested. 12.8 is the minimum (it is the first version with `sm_120`). The installer sets `CUDA_PATH`, which `build.cmd` uses. |
+
+To use a standalone vcpkg instead of the one bundled with VS, set `VCPKG_ROOT` to its folder.
+
+### Files you must download yourself
+
+These are excluded by `.gitignore` (license terms or GitHub's file-size limit), so a fresh clone does not build
+until you add them.
+
+#### 1. NVIDIA Video Effects SDK → `sdk\vfx\VideoFX`
+
+1. Download the **Windows x64** NVIDIA Video Effects (Maxine VFX) SDK **1.3.0** from NVIDIA
+   ([docs and download](https://docs.nvidia.com/maxine/vfx/index.html)). It is under NVIDIA's license and cannot be
+   redistributed in this repository.
+2. Extract it so that the folder looks like this:
+
+   ```
+   sdk\vfx\VideoFX\
+     bin\            NVVideoEffects.dll, NVCVImage.dll, ...
+     features\       install_feature.ps1
+     nvvfx\          include\, src\ (the proxy sources compiled into VidBox)
+   ```
+
+3. Install the two features VidBox uses. You need an NGC API key (free NVIDIA NGC account):
+
+   ```powershell
+   cd sdk\vfx\VideoFX\features
+   $Env:NGC_CLI_API_KEY = "<your-ngc-api-key>"
+   Set-ExecutionPolicy Bypass -Scope Process
+   .\install_feature.ps1 -features nvvfxvideoframegeneration,nvvfxvideosuperres -version 1.3.0.0
+   ```
+
+   This adds `features\nvvfxvideoframegeneration`, `features\nvvfxvideosuperres` (their headers are needed to
+   compile) and the TensorRT models in `bin\models` (needed at run time).
+
+   The models are built for the GPU architecture the script detects. On a machine with a different GPU generation,
+   run the script again there, or pass `-gpu 89` (RTX 40) or `-gpu 120` (RTX 50).
+
+#### 2. FFmpeg → `third_party\ffmpeg`
+
+Download an FFmpeg 8.1 **LGPL shared** Windows x64 build: `ffmpeg-n8.1-latest-win64-lgpl-shared-8.1` from
+[BtbN's FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases). Extract it so that `bin`, `include` and
+`lib` sit directly in that folder:
+
+```
+third_party\ffmpeg\
+  bin\       avcodec-62.dll, avutil-60.dll, ...
+  include\   libavcodec\, libavutil\, ...
+  lib\       avcodec.lib, avutil.lib, ...
+```
+
+The DLL major versions (`avcodec-62`, `avutil-60`) must match the 8.1 headers. A different FFmpeg major version
+will not work as a drop-in replacement.
+
+#### Created automatically (nothing to download)
+
+- `vcpkg_installed\`: libdatachannel and OpenSSL, built by vcpkg from `vcpkg.json` on the first `build.cmd` run.
+- `build\`: CMake/Ninja output. If it was copied from another folder or machine, `build.cmd` detects that and
+  reconfigures from scratch.
+- `%APPDATA%\VidBox\settings.json` and `*.log`: created by the app at run time.
+
 ## Build
+
+From the repository root (in PowerShell, type `.\build.cmd`):
 
 ```
 build.cmd
 ```
 
 Output: `build\VidBox.exe` (FFmpeg DLLs are copied next to it). The first build also runs vcpkg to build
-libdatachannel and OpenSSL (`vcpkg.json`, about 7 minutes).
+libdatachannel and OpenSSL (about 7 minutes).
 
-Requirements: VS 2022 Build Tools (C++, including its bundled vcpkg), CMake, CUDA Toolkit 13.x, and the **Windows x64** NVIDIA Video Effects
-SDK in `sdk\vfx\VideoFX` with the `nvvfxvideoframegeneration` and `nvvfxvideosuperres` features installed.
+This dev build loads the Video Effects runtime from `sdk\vfx\VideoFX` in your checkout, so it only runs on the
+machine that built it.
 
-Not in the repository (see `.gitignore`); download them yourself:
+### Distributable build
 
-- `sdk\vfx\VideoFX`: the NVIDIA Video Effects SDK, from NVIDIA under their license.
-- `third_party\ffmpeg`: an FFmpeg 8.1 **LGPL shared** Windows x64 build (`ffmpeg-n8.1-latest-win64-lgpl-shared-8.1`
-  from BtbN's FFmpeg-Builds), extracted so that `bin`, `include` and `lib` sit directly in that folder.
+```
+build.cmd --release
+```
+
+This builds into `build-release\` (the normal `build\` is left alone) and packages a standalone app as
+`dist\VidBox-<version>-win64.zip` (about 1.3 GB, mostly NVIDIA's CUDA/TensorRT runtime). The version comes from
+`vcpkg.json`. Users extract the zip and run `VidBox.exe`. Nothing else needs to be installed except an NVIDIA
+driver on an RTX 40/50 GPU.
+
+The zip contains:
+
+| Path | Contents |
+|---|---|
+| `VidBox.exe` | Built without the SDK fallback path, so it loads the Video Effects runtime only from `vfx\` |
+| `*.dll` | The FFmpeg DLLs the exe uses (found with `dumpbin`) and the Visual C++ runtime (app-local, so no VC++ Redistributable is needed) |
+| `vfx\bin`, `vfx\features` | The Video Effects runtime and only the two features VidBox uses, with NVIDIA's license files |
+| `licenses\` | FFmpeg (LGPL), Dear ImGui, nlohmann/json and the vcpkg packages that are statically linked (libdatachannel, OpenSSL, ...) |
+
+Packaging is done by `scripts\package.ps1`. To check a package, extract it somewhere else and run
+`VidBox.exe --selftest`. The log should show `vfx: SDK ... at <that folder>\vfx` and `0 failure(s)`.
+
+Before publishing a zip, check that NVIDIA's license terms (`vfx\license`) allow you to redistribute the Video
+Effects runtime with your app. FFmpeg is LGPL and is shipped as unmodified shared DLLs, which keeps it replaceable.
 
 ## Check the GPU features without the KVM
 

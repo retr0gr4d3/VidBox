@@ -22,6 +22,7 @@ bool VfxInitLibrary(std::string* sdkDirOut) {
     // Prefer a copy shipped next to the exe (vfx\bin), else the SDK the app was built against.
     std::string candidates[] = {Narrow(ExeDir()) + "\\vfx", VIDBOX_VFX_SDK_DIR};
     for (auto& c : candidates) {
+      if (c.empty()) continue;  // release builds have no SDK fallback
       std::string bin = c + "\\bin";
       if (GetFileAttributesA((bin + "\\NVVideoEffects.dll").c_str()) != INVALID_FILE_ATTRIBUTES) {
         g_sdkDir = c;
