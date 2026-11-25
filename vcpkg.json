@@ -1,0 +1,8 @@
+{
+  "name": "vidbox",
+  "version-string": "0.1.0",
+  "builtin-baseline": "1911fa2a6e1ccaf8eda36b4057ad9fc68e781e93",
+  "dependencies": [
+    { "name": "libdatachannel", "default-features": false, "features": [ "srtp" ] }
+  ]
+}

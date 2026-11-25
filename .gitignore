@@ -1,0 +1,13 @@
+# Build output and package caches
+/build/
+/vcpkg_installed/
+
+# NVIDIA Video Effects SDK (NVIDIA license; not redistributable here, ~2 GB). See README.
+/sdk/
+
+# FFmpeg binaries (single DLLs exceed GitHub's 100 MB limit). See README.
+/third_party/ffmpeg/
+
+# Local files that may hold personal data
+*.log
+settings.json
